@@ -1,0 +1,8 @@
+firmware/
+extracted/
+logs/
+.env
+*.img
+*.chk
+*.zip
+analysis/

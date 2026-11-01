@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "rea": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "rea-mcp",
+        "rea",
+        "--mcp"
+      ],
+      "env": {}
+    }
+  }
+}
