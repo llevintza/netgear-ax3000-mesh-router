@@ -1,0 +1,26 @@
+<!-- Hand-written excerpt modelled on www/WLG_wireless2.htm as served (tags rendered). -->
+<script>
+function setChannel() { var wlg_mode = "HT80"; }
+function setHChannel() { var wlaRegion = "11"; var sku = "US"; }
+</script>
+<form id="target"  method="POST" action="wireless.cgi?id=cccc3333">
+<input type="hidden" name="buttonHit"><input type="hidden" name="buttonValue">
+<button value="Apply" id="apply" onclick="buttonClick(this,'Apply');return checkData();" type="SUBMIT" name="Apply" class="apply_bt">Apply</button>
+<input type="text" class="input1" name="ssid" id="ssid" value="HomeNet" size="20" maxlength="32">
+<select name="w_channel" id="wireless_channel" size=1></select>
+<select name="w_channel_an" id="wireless_channel_an" size=1 onChange="checkChannel();"></select>
+<input type="radio" name="security_type" id="security_wpa2" value="WPA2-PSK" >
+<input type="password" class="input1" id="passphrase_wpa2" name="passphrase_wpa2" value="">
+<input type="hidden" name="initChannel" value="0">
+<input type="hidden" name="initHChannel" value="44">
+<input type="hidden" name="WRegion" value="11">
+<input type="hidden" name="wds_enable" value="0">
+<input type="hidden" name="coexistence" value="1">
+<input type="hidden" name="only_mode" value="0">
+<input type="hidden" name="show_wps_alert" value="0">
+<input type="hidden" name="security_type_2G" value="WPA2-PSK">
+<input type="hidden" name="passphrase" id="passphrase_hidden" value="">
+<input type="hidden" name="telec_dfs_ch_enable" value="0">
+<input type="hidden" name="ce_dfs_ch_enable" value="0">
+<input type="hidden" name="fcc_dfs_ch_enable" value="1">
+</form>

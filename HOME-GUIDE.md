@@ -1,98 +1,86 @@
 # At-home guide: fix the satellite drops
 
-The goal is to find out **why** the satellites lose their 5 GHz link to the router, then fix it. Background and evidence are in [FINDINGS.md](FINDINGS.md).
+Goal: find out **why** the satellites lose their 5 GHz link to the router, with evidence, then apply the matching fix. Background: [FINDINGS.md](FINDINGS.md).
 
-**Allow about 1 hour, plus 1–2 days of watching.** Do the steps in order. Each one ends with something to write down.
+**Who does what.** A coding agent on your laptop drives the router and analyzes logs with the repo's tools. You only do what needs hands and eyes: labels, LEDs, moving units, cables, and approving changes. Each agent step has a **browser fallback**, because the tools haven't been tested on a live router yet.
 
-Before you start:
-- Use the laptop, ideally **plugged into the router with Ethernet** or sitting next to it. Some steps reboot the Wi-Fi.
-- Have the router admin password ready (the one you set at setup; routerlogin.net asks for it).
-- **Do NOT factory-reset anything.** It wipes the mesh pairing and doesn't fix the cause.
-- Firmware files are already downloaded in `firmware/` in this repo.
+> **Start the agent with:** "Open this repo, read AGENTS.md, and follow HOME-GUIDE.md using the `home-session` skill. Ask me before any change."
+
+**Allow about 1–2 hours on day 1** (mostly waiting for a red event), then 1–2 days of watching.
+
+## Before you start
+- The laptop is on the home network (Wi-Fi is fine; Ethernet to the router is better for steps that restart Wi-Fi).
+- Have the router admin password ready. Give it to the agent's shell as an environment variable for this session only: `export ROUTER_PASSWORD='…'`. Never put it in a file or a chat message that gets saved.
+- **Don't factory-reset anything.** It wipes the mesh pairing, puts the 5 GHz mode back to HT160, and doesn't fix the cause.
 
 ---
 
-## Step 1: Take inventory (5 min)
-1. Turn each satellite over and read the label. Write down the **model** (expected: **MS70**) and the last 4 characters of the serial.
-   - If it says something other than MS70, **stop at this step** and note the exact model. You'll need firmware for that model instead. The firmware in `firmware/` is for MS70.
-2. Note where each satellite is: which room, roughly how far from the router, and how many walls or floors are in between.
-3. Note each unit's LED right now (white/blue = OK, red/amber = lost the router, off).
+## Step 1: You, physical inventory (5 min)
+1. Read each satellite's label: the **model** (expected **MS70**) and the last 4 characters of the serial. If it's not MS70, stop and note the exact model; the analysis and firmware here are for MS70.
+2. Note each satellite's room, rough distance to the router, and the walls or floors in between.
+3. Note each unit's LED now (white/blue = OK, red = has lost the router).
 
-📝 Write down: models, locations, distances, LED colors.
+## Step 2: Agent, baseline status (read-only, 5 min)
+```bash
+python3 -I tools/netgear_router.py status            # router
+python3 -I tools/netgear_router.py status --json > logs/status-router-$(date +%F).json
+```
+Record from the output:
+- **firmware versions** for the router and each satellite (target: 1.0.5.50_2.0.70)
+- **`wlg_mode`**: expected **HT160** (factory). This is the key fact behind the DFS problem (FINDINGS §4).
+- **configured channel** (expected 44) and the **in-use 5G Channel** row (at HT160 it lists the whole block, e.g. `36(P)+40+…+64`)
+- the **satellite table**: IP address, 2.4/5 GHz or wired, connected to Router or Satellite
 
-## Step 2: Check firmware versions and the current 5 GHz channel (5 min)
-1. Open **http://routerlogin.net** and log in.
-2. Find the firmware versions: **ADVANCED → Administration → Router Update** (or the router status / attached satellites page). Note the router's and each satellite's version.
-3. Find the current 5 GHz channel: **ADVANCED → Setup → Wireless Setup**, in the 5 GHz section (it may say Auto, with the current channel shown).
-   - **Channels 52–144 are DFS channels.** These are the ones the firmware's default settings allow, and they cause drops when radar is detected.
-   - 36, 40, 44, 48, 149, 153, 157, 161 and 165 are non-DFS.
+Then check each satellite with `--host <satellite-ip> status`. Whether the satellite accepts the same admin login is unverified. If it doesn't, use the browser.
 
-📝 Write down: firmware versions; 5 GHz channel setting (Auto or fixed) and current channel number.
+**Browser fallback:** ADVANCED → Administration → **Router Status** (5G Channel row) and **Attached Devices** (Connected Satellite table). The version is in the page header. Note: the "Backhaul Status" column always says "Good"; it's a fixed label, not a measurement.
 
-## Step 3: Start log capture *before* changing anything (5 min to set up)
-This captures evidence of what happens during a red event, so we know whether the cause is radar/DFS or weak signal.
+## Step 3: Agent, start log capture on all three units (5 min to set up)
+The router's log doesn't include the satellites, and the satellite logs hold the LED and ping evidence. So capture on **every** unit:
+```bash
+python3 -I tools/netgear_router.py debug-logs enable               # dry run: shows the request
+python3 -I tools/netgear_router.py --apply debug-logs enable
+python3 -I tools/netgear_router.py --apply capture start
+# repeat both with --host <satellite-1-ip> and --host <satellite-2-ip>
+```
+**Browser fallback:** open `http://routerlogin.net/debug.htm` (and `http://<satellite-ip>/debug.htm`), tick **WBD Log Capture** and **BH Management Log Capture** (the page reloads after each tick), keep Store location = **System Memory**, and click **Start Capture**.
 
-1. Go to **http://routerlogin.net/debug.htm** (same login).
-2. Tick **WBD Log Capture**. That's the mesh daemon: logs radar events and the satellite being dropped. The page reloads when you tick it.
-3. Tick **BH Management Log Capture**. That's the satellite supervisor: logs ping failures and the LED changes. The page reloads again.
-4. Under **Debug Log Capture**, leave **Store location = System Memory**, then click **Start Capture**.
-5. Leave it running until **a satellite goes red at least once** (up to about 1 hour, or longer if drops are rare).
-   - Write down the **time** each red LED appears.
-6. Back on `debug.htm`, click **Save Log**. That downloads `Debug_log.zip`.
-7. Put the zip in **`logs/`** in this repo (`mkdir -p logs`). That folder is gitignored, because logs contain MAC addresses and network names.
+**You:** leave everything running until **a satellite goes red at least once** (or ~1 hour). Write down the **time** each red LED appears. If drops are rare, carry on with Step 4 and come back to Step 5 later.
 
-> If drops are rare (less than once an hour), skip waiting: start the capture, continue with Step 4, and save the log later.
+## Step 4: You + agent, firmware (only if any unit isn't on 1.0.5.50_2.0.70)
+The tool doesn't upload firmware. Do this in the browser:
+1. ADVANCED → Administration → **Router Update** → **Manual Update** tab.
+2. **Satellites first:** click a satellite's row in the satellite table. Its own Router Update page opens in a **new tab** (allow pop-ups). Log in, choose `firmware/MS70-V1.0.5.50_2.0.70/MS70-V1.0.5.50_2.0.70.chk` → Upload. Repeat for the other satellite.
+3. **Then the router:** on the Manual Update tab, Browse → `firmware/MR70-V1.0.5.50_2.0.70/MR70-V1.0.5.50_2.0.70.chk` → Upload.
+4. Don't unplug anything. Wait until all LEDs are steady. Updating restarts the units, so restart the capture (Step 3) afterwards.
 
-📝 Write down: times of red events; where you saved the zip.
+## Step 5: Agent, save logs and get a verdict (5 min)
+```bash
+python3 -I tools/netgear_router.py capture save -o logs/router-$(date +%F-%H%M).zip
+python3 -I tools/netgear_router.py --host <sat-1-ip> capture save -o logs/sat1-$(date +%F-%H%M).zip
+python3 -I tools/netgear_router.py --host <sat-2-ip> capture save -o logs/sat2-$(date +%F-%H%M).zip
+python3 -I tools/analyze_logs.py logs/router-*.zip logs/sat1-*.zip logs/sat2-*.zip
+```
+**Browser fallback:** on each `debug.htm`, click **Save Debug Log** and move the `Debug_log.zip` files into `logs/`, renamed per unit. `logs/` is gitignored; the zips contain MACs, network names and config backups, so never commit or share them.
 
-## Step 4: Update firmware if needed (15–20 min)
-Only if any unit is **not** on **1.0.5.50_2.0.70**.
-1. **ADVANCED → Administration → Router Update → Manual Update.**
-2. **Satellites first:** choose the satellite. A new page pops up. Upload `firmware/MS70-V1.0.5.50_2.0.70/MS70-V1.0.5.50_2.0.70.chk`. Repeat for the second satellite.
-3. **Then the router:** upload `firmware/MR70-V1.0.5.50_2.0.70/MR70-V1.0.5.50_2.0.70.chk`.
-4. Don't unplug anything during an update. Wait until all LEDs are steady again (a few minutes after the router reboots).
+The agent compares the incident times with your red-LED times. The **VERDICT** line picks the branch in Step 6.
 
-📝 Write down: new versions confirmed.
+## Step 6: Fix, by verdict (agent proposes, you approve)
+| Verdict | What to do |
+|---|---|
+| **DFS / radar** | The radio has to leave the DFS part of 5 GHz: **80 MHz width + channel 36/40/44/48**. The web interface **can't** change the width (FINDINGS §4), and the tool doesn't do it yet. **Stop here and decide together:** check whether the Nighthawk app offers a 5 GHz mode setting, or have the agent implement the SOAP call described in FINDINGS §4 (it must resend the SSID and passphrase, so review it first). After any change, re-run Step 2 and check that **the satellites' 5G Channel row is no longer a 36–64 block**. If the satellites stay at 160 MHz, the robust fix is **wired Ethernet backhaul**. |
+| **Weak signal / RSSI** | You: move that satellite closer to the router (halfway between the router and the area to cover, in the open, up high), aiming for better than about -70 dBm. Or run an Ethernet cable to it; wired backhaul is detected automatically. Optional afterwards: `--apply bh-optimize` once, then reboot the router (FINDINGS §6). |
+| **Controller unreachable while link up** | Not radio-related. The agent re-captures with Wi-Fi debug enabled and looks for router-side causes. Check that nothing like a switch or loop sits between units. |
+| **MIXED / INCONCLUSIVE** | Capture longer (more red events), on all three units, then analyze again. |
 
-## Step 5: Pin 5 GHz to a non-DFS channel (5 min). This is the main fix.
-1. **ADVANCED → Setup → Wireless Setup**, 5 GHz section.
-2. Change the channel from **Auto** to **36** (or 40/44/48), then click **Apply**.
-   - You only change this on the router. The satellites follow automatically, because they use the same 5 GHz radio for the backhaul.
-3. Wi-Fi restarts. Wait 2–3 minutes until both satellites show a steady normal LED.
-   - Expect the satellite LED to stay non-red for at least ~40 s after boot. The satellite software waits 40 s before checking.
+> **Don't bother changing only the 5 GHz channel at HT160.** Every channel offered in that mode is in a 160 MHz block that contains DFS channels (FINDINGS §4). `set-5g-channel` warns about this.
 
-📝 Write down: time of the change, new channel.
-
-## Step 6: Run backhaul optimization (5 min)
-1. Open **http://routerlogin.net/debug.htm** again.
-2. Under **BH Optimization Management**, click **BH optimization** once. It greys out while it runs.
-3. Wait about 5 minutes. The mesh may briefly re-link the satellites (direct to the router, or through the other satellite, whichever is better).
-
-## Step 7: Check signal and placement (10 min)
-The router treats a satellite link weaker than about **-75 dBm** as weak. Aim for **-70 dBm or better**.
-1. Quick proxy with the Mac: stand next to each satellite, hold **Option** and click the Wi-Fi icon in the menu bar, and check **RSSI** while connected near that satellite. Then do the same **halfway between the satellite and the router**.
-2. If a satellite is far from the router (more than 2 walls, a floor, or long distance), move it **closer to the router**, about halfway between the router and the area you need covered, ideally in the open and up high.
-3. If one satellite can't get a good signal anywhere useful: run an **Ethernet cable** from the router (or a switch) to that satellite. The firmware supports wired backhaul and switches to it automatically.
-
-📝 Write down: any moves made, approximate RSSI readings.
-
-## Step 8: Watch for 1–2 days
-- Glance at the satellite LEDs a few times a day. Note any red events with times.
-- Expect **no red** if DFS was the cause. Brief red right after a reboot or a settings change is normal.
-- If you see red again:
-  1. Start a new capture on `debug.htm` (Steps 3.4–3.7). The log checkboxes stay ticked.
-  2. Save `Debug_log.zip` into `logs/` with the date in the name, e.g. `logs/Debug_log-2026-11-03.zip`.
-
-## Step 9: Send results back
-Open this repo with your coding agent (or a person helping you) and share:
-- your notes from Steps 1–8 (models, versions, channel before/after, red-event times, RSSI, moves)
-- the log zip(s) in `logs/`
-
-The logs get read against the decompiled firmware behavior in FINDINGS.md. What to look for:
-- `RADAR DETECTED` / `AP_CHAN_CHANGE` → DFS was the cause (should stop after Step 5).
-- `ping base … failed count` without a link drop → the router is unreachable even though Wi-Fi is up (look at interference or the router itself).
-- `Blocking backhaul BSS` / `wifi is down` / `Backhaul connection changed` → the radio link itself is dropping (signal/placement → Step 7, or wired backhaul).
+## Step 7: Watch for 1–2 days
+- You: glance at the LEDs a few times a day and note any red events with times. Brief red right after a reboot or change is normal (the satellite waits 40 s after boot before checking).
+- If red again: repeat Steps 3 and 5 (the log ticks stay set across reboots) and re-run the analyzer on the new zips.
 
 ## Rollback
-- To undo the channel change: set 5 GHz back to **Auto** in Wireless Setup.
-- To stop debug logging: untick the two boxes on `debug.htm`. Logging in System Memory is cleared on reboot.
+- **Channel:** set it back to the value recorded in Step 2 (factory 44). There's no "Auto" for 5 GHz on this router.
+- **Logging:** `--apply debug-logs disable` on each unit, or untick both boxes on `debug.htm`. The ticks persist across reboots until removed.
+- **BH optimization:** reboot the router; its enable flag stays on until reboot.
+- **Width (if changed):** set the 5 GHz mode back to HT160 the same way it was changed.

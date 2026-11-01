@@ -1,0 +1,56 @@
+<!-- Hand-written excerpt modelled on www/debug_frame.htm (fw 1.0.5.50_2.0.70) as httpd
+     would serve it: <%NNN%> tags rendered, ?id= CSRF tokens injected. Not a vendor copy. -->
+<script>
+function init(){ cf2.action_Start_Capture.outerHTML='<button type="SUBMIT" name=action_Start_Capture disabled="disabled">'; }
+</script>
+<form id="cf" action=newdebug.cgi?id=aaaa0000 method="POST"><b>Basic Information</b></form>
+<form id="cf1" action=newdebug.cgi?id=aaaa1111 method="POST">
+<input type="checkbox" name="accel_debug" value="accel_debug" onclick="document.forms[1].submit();" >
+<input id="log_capture_st" type="checkbox" name="action_Start_When_Boot_Up" value="Start_When_Boot_Up">
+<input id="stdout_dump" type="checkbox" name="stdout_dump" value="STDOUT_dump">
+<input id="soap_debug" type="checkbox" name="soap_debug" value="SOAP_debug">
+<input id="acos_agent_debug" type="checkbox" name="acos_agent_debug" value="ACOS_AGENT_debug"><b> BH Management Log Capture </b>
+<input id="wifi_debug" type="checkbox" name="wifi_debug" value="WIFI_debug">
+<input id="hapd_debug" type="checkbox" name="hapd_debug" value="HAPD_debug">
+<input id="mfp_disable" type="checkbox" name="mfp_disable" value="MFP_disable">
+<input id="bsd_debug" type="checkbox" name="bsd_debug" value="BSD_debug">
+<input id="steering_debug" type="checkbox" name="steering_debug" value="STEERING_debug">
+<input id="wbd_debug" type="checkbox" name="wbd_debug" value="WBD_debug"><b> WBD Log Capture </b>
+<input id="inet_debug" type="checkbox" name="inet_debug" value="INET_debug">
+<input type="checkbox" name="dal_debug" value="DAL_debug">
+<input type="checkbox" name="attach_device_debug" value="Attach_Device_Debug">
+<!--
+<input type="checkbox" name="lacp_debug" value="LACP_debug">
+-->
+<input type="hidden" name="Start_When_Boot_Up" value="0">
+<input type="hidden" name="STDOUT_dump" value="0">
+<input type="hidden" name="SOAP_debug" value="0">
+<input type="hidden" name="ACOS_AGENT_debug" value="0">
+<input type="hidden" name="WIFI_debug" value="0">
+<input type="hidden" name="INET_debug" value="0">
+<input type="hidden" name="BSD_debug" value="0">
+<input type="hidden" name="STEERING_debug" value="0">
+<input type="hidden" name="WBD_debug" value="1">
+<input type="hidden" name="HAPD_debug" value="0">
+<input type="hidden" name="MFP_disable" value="1">
+<input type="hidden" name="DAL_debug" value="0">
+<input type="hidden" name="Attach_Device_Debug" value="0">
+<input type="hidden" name="ACCEL_debug" value="0">
+<input type="hidden" name="form" value="1" >
+</form>
+<form id="cf2" action=newdebug.cgi?id=aaaa1111 method="POST">
+<input id="wanlan_capture_en" type="checkbox" name="action_Capture_Packets" value="Capture_Packet">
+<select id="store_location" name="store_location">
+<option value="memory" selected>System Memory&nbsp;</option>
+<option value="usb" >USB Storage</option>
+</select>
+<button id="start_capture" type="SUBMIT" value="Start_Capture" name="action_Start_Capture" class="button-sty1">Start Capture</button>
+<button id="save_log" type="BUTTON" value="DebugLog" name="DebugLog" onclick="window.location.href = 'Debug_log.zip';">Save Debug Log</button>
+<input type="hidden" name="capture_in_process" value="">
+<input type="hidden" name="dump_LAN_WAN_pkt" value="Off">
+<input type="hidden" name="form" value="2" >
+</form>
+<form id="cf9"  action="bh_opt.cgi?id=bbbb2222" method="POST">
+<button type="SUBMIT" value="bh_opt" id="bhOptSetting" name="bh_opt_setting" class="button-sty1"><span>BH optimization</span></button>
+<input type="hidden" name="bh_opt_state" value="">
+</form>

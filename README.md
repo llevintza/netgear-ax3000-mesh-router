@@ -13,8 +13,8 @@ The approach is to reverse-engineer the official firmware (**1.0.5.50_2.0.70**) 
 
 ## Short version
 - The red LED means the satellite has lost contact with the router: about 25 s of failed pings, or the 5 GHz link dropping (decompiled from `acos_agent`).
-- The backhaul shares the 5 GHz radio with the clients. Factory defaults pick the 5 GHz channel automatically and allow DFS (radar) channels, so a radar detection forces a channel change and cuts the satellites off.
-- Main fix: pin 5 GHz to a non-DFS channel (36–48), then run BH optimization on `routerlogin.net/debug.htm`, check placement, and use wired backhaul if needed.
+- The backhaul shares the 5 GHz radio with the clients. By factory default that radio runs at **160 MHz on channel 44**, a block that always includes DFS (radar) channels 52–64. A radar detection forces the radio off the block and cuts the satellites off.
+- The web interface can't change the width, so changing only the channel doesn't help. Leading fixes: 80 MHz width with channel 36–48 (outside the web interface), or wired backhaul. **Confirm the trigger with logs first:** see [HOME-GUIDE.md](HOME-GUIDE.md), which an agent can mostly run for you with `tools/netgear_router.py` and `tools/analyze_logs.py`.
 
 ## Reproduce the analysis
 Requirements: Docker (tested with Colima on Apple silicon), about 5 GB free in Docker, Python 3.
@@ -30,6 +30,7 @@ Firmware images, extracted files, NVRAM dumps, decompiled code and device logs a
 FINDINGS.md        analysis with evidence (file paths, functions, NVRAM keys)
 HOME-GUIDE.md      on-site checklist
 AGENTS.md          instructions for any coding agent (CLAUDE.md is an import-only pointer)
-tools/             Dockerfile, extraction + MCP scripts, NVRAM table decoder
+tools/             Dockerfile, extraction + MCP scripts, NVRAM decoder, router client, log analyzer, checks
+skills/            agent-agnostic playbooks (REA usage itself comes from REA's own skill)
 firmware/ extracted/ analysis/ logs/   local only (gitignored)
 ```

@@ -16,6 +16,12 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 | `tools/fetch-and-extract.sh` | yes | Download → SHA-256 verify → REA region scan → REA rootfs extraction |
 | `tools/rea-mcp-container.sh` | yes | Starts the long-running `rea-mcp` container used by `.mcp.json` |
 | `tools/nvram_defaults.py` | yes | Recovers compiled NVRAM default tables (`key=value`) from 32-bit ARM ACOS ELFs |
+| `tools/netgear_router.py` | yes | Router/satellite web-UI client: status, debug-logs, capture start/save, set-5g-channel, bh-optimize (dry-run unless `--apply`) |
+| `tools/analyze_logs.py` | yes | `Debug_log.zip` → classified incident timeline + verdict |
+| `tools/tests/` | yes | stdlib unittest suites + small synthetic fixtures |
+| `tools/check-repo.sh` | yes | Guardrails shared by the pre-commit hook, CI and agents |
+| `skills/` | yes | Agent-agnostic task playbooks (see Skills) |
+| `.githooks/`, `.github/workflows/` | yes | Pre-commit hook and CI, both calling `tools/check-repo.sh` |
 | `.mcp.json` | yes | Project-scoped MCP registration of `rea` (`docker exec -i rea-mcp rea --mcp`) for clients that read this format |
 | `CLAUDE.md` | yes | Import-only pointer to this file, for agents that look for `CLAUDE.md` |
 | `firmware/` | **no** | Official zips/`.chk` images + `SHA256SUMS` |
@@ -32,27 +38,46 @@ tools/rea-mcp-container.sh                    # (re)start container for the MCP 
 docker exec rea-mcp rea doctor                # binwalk/unblob/ghidra should be healthy
 python3 -I tools/nvram_defaults.py extracted/MS70/selected.bin_extract/bin/acos_nvram > analysis/MS70-nvram.txt
 ```
-Decompile a stripped binary (output must go to `/work/out`, then copy it out):
-```bash
-B=$PWD/extracted/MS70/selected.bin_extract/usr/sbin/acos_agent
-docker exec rea-mcp rea decompile-all "$B" --output /work/out/acos_agent_MS70 --provider ghidra --format json
-docker exec rea-mcp sh -c 'tar -C /work/out -cf - acos_agent_MS70' | tar -C analysis/decompiled -xf -
-grep -l "ping base" analysis/decompiled/acos_agent_MS70/functions/*.c   # find functions by log string
-```
+## REA: don't duplicate it, use it
+REA's own agent skill, **`reverse-engineer-anything`**, is the reference for *how* to use REA: target routing, firmware extraction, decompilation, evidence handling and error recovery. This repo doesn't restate any of that. Repo files add only device-, environment- and investigation-specific context.
+- Install REA's skill **globally** for your agent (instructions only; it doesn't touch MCP config), using the copy bundled in the container so it matches the container's REA version exactly:
+  ```bash
+  d=$(mktemp -d) && docker cp rea-mcp:/usr/local/lib/node_modules/rea-agents/skills/reverse-engineer-anything "$d/"
+  (cd ~ && npx -y skills@1.7.4 add "$d" -s reverse-engineer-anything -g -a <agent> -y)   # e.g. -a claude-code -a codex -a cursor -a gemini-cli
+  ```
+  `npx skills add morluto/rea …` (cloning from GitHub) times out on REA's large repo, and its `main` branch may describe tools the container's REA lacks. **Never install it at project scope:** `.claude/skills` → `skills/` would vendor REA's skill into this repo.
+- **Don't** run `rea-agents setup` on the host to register MCP: REA's firmware tools need Linux. Register the containerized server below instead.
+
 ### REA as an MCP server (any MCP-capable agent)
 REA speaks MCP over stdio. With the `rea-mcp` container running (`tools/rea-mcp-container.sh`), register a **stdio** server in your agent's MCP config:
 - command: `docker`
 - args: `exec -i rea-mcp rea --mcp`
 
-`.mcp.json` at the repo root is this registration in the project-scoped format some clients read. If your agent uses a different config file, add the same command there; don't change `.mcp.json` for one client. The server exposes ~229 tools, including `inspect_firmware_regions`, `extract_firmware`, `open_binary`, `decompile_all` and `search_strings`; your client decides how their names are prefixed. Paths you pass must be absolute host paths under the repo (the container mounts the repo at the same path), and extraction output must go under `/work/out` (see Gotchas). If MCP isn't available, use the `docker exec rea-mcp rea <command>` CLI shown above. It's equivalent.
+`.mcp.json` at the repo root is this registration in the project-scoped format some clients read. If your agent uses a different config file, add the same command there; don't change `.mcp.json` for one client. The server exposes ~229 tools, including `inspect_firmware_regions`, `extract_firmware`, `open_binary`, `decompile_all` and `search_strings`; your client decides how their names are prefixed. Paths you pass must be absolute host paths under the repo (the container mounts the repo at the same path), and extraction output must go under `/work/out` (see Gotchas). If MCP isn't available, use the equivalent CLI: `docker exec rea-mcp rea <command>`.
+
+## Skills (task playbooks)
+Step-by-step procedures live in `skills/<name>/SKILL.md` (plain markdown with a name/description header). **Before starting a matching task, read the skill and follow it.** `.claude/skills` is a symlink to `skills/` for agents that auto-discover from there. Edit only `skills/`; don't create per-agent copies.
+
+| Skill | Use when |
+|---|---|
+| [mesh-firmware-investigation](skills/mesh-firmware-investigation/SKILL.md) | Any firmware behavior question: where the logic lives, container constraints, evidence conventions (use with REA's skill) |
+| [home-session](skills/home-session/SKILL.md) | The owner is on the home network: run HOME-GUIDE.md with the router tool, approval before changes |
+| [analyze-router-logs](skills/analyze-router-logs/SKILL.md) | New `Debug_log.zip` files in `logs/`: run the analyzer, sanity-check the input, interpret the verdict |
+
+Repo skills must not restate REA functionality (tool usage, extraction or decompilation steps, REA error remedies). If REA's skill or docs cover it, link to them instead.
+
+## Checks (run before every commit)
+```bash
+git config core.hooksPath .githooks   # once per clone: pre-commit runs the checks on staged files
+tools/check-repo.sh                   # forbidden paths, gitleaks, bash -n + shellcheck, py_compile, unit tests
+```
+CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
 
 ## Gotchas (each one cost time; don't rediscover them)
-- **REA output dirs must not be bind mounts.** On Colima, REA fails with `Extraction directory identity changed`. Write to a container path (`/work/...`; `rea-mcp` has volume `rea-out` at `/work/out`), then `tar` it out.
-- **REA extraction budget:** the default 256 MiB `max_output_bytes` is too small for these images. Use `--max-output-bytes 536870912` (REA's max) **and** restrict to the rootfs with `--offset/--length`. Offsets for 1.0.5.50_2.0.70: MR70 `6797886 62090395`, MS70 `6796746 45298222` (the script derives them from the region scan).
-- REA requires the extraction output dir to **not exist**. A failed run can leave an empty dir behind, so remove it before retrying.
+- **REA output dirs must not be bind mounts (Colima-specific).** On Colima, REA fails with `cleanup_incomplete` / "Extraction directory identity changed". Write to `/work/out` (volume `rea-out` in `rea-mcp`), then `tar` it out.
+- These images need REA's maximum extraction budget plus a rootfs-only byte range. `tools/fetch-and-extract.sh` already does both.
 - **Ghidra on arm64:** release zips ship no `linux_arm_64` natives. The Dockerfile builds them with `support/gradle/gradlew buildNatives` (Ghidra 12 has no `support/buildNatives`).
 - **NVRAM defaults are compiled in**, not in text files. Neighboring strings in `strings` output are *not* key/value pairs (strings are de-duplicated). Use `tools/nvram_defaults.py`, which decodes the `{key*, value*, flags}` struct tables.
-- Binaries are **32-bit ARM EABI5, stripped.** Find functions by log strings; resolve `DAT_xxxx` string constants by mapping the vaddr through PT_LOAD segments.
 - On this Mac, `grep` may be aliased to `ugrep`, which rejects some regexes ("exceeds complexity limits"). Use `/usr/bin/grep` or `rg`.
 - macOS ships bash 3.2: no `declare -A`, no `mapfile` in scripts.
 - Long Docker builds: run them in the background and log to a file. Report the build's real exit code, not the exit code of a `| tail` pipe.
@@ -62,6 +87,8 @@ REA speaks MCP over stdio. With the `rea-mcp` container running (`tools/rea-mcp-
 - SoC **Broadcom BCM6756**, BCA SDK 5.04L.02p1, image = Netgear CHK header + FIT (bootfs + SquashFS xz rootfs). Not Qualcomm: there is no `hyd`/`repacd`.
 - Mesh stack: Broadcom Wi-Fi Blanket `wbd_master` (router) / `wbd_slave` (satellite) over `ieee1905` EasyMesh. Netgear's satellite supervisor is `usr/sbin/acos_agent`. Channel selection is done by `acsd2`.
 - **Dual-band mesh:** the backhaul shares the 5 GHz radio `wl1` (router BSS `wl1.1`, satellite STA `wl1.2`).
+- **5 GHz runs 44/160 by default** (`wlg_mode=HT160`, `wlg_channel=44`), so the radio always spans DFS channels 52–64. `acsd2` stays in monitor mode, so the `wl1_acs_*` keys are irrelevant. The web UI can set only the channel (no Auto, no width). The width can only be changed via SOAP `Set5GWLANWPAPSKByPassphrase`. Satellites are forced to `<ch>/160`. Details and evidence: FINDINGS.md §4.
+- Each unit (router and each satellite) has its own `debug.htm` and `Debug_log.zip`. The router's zip doesn't include satellite logs.
 - Hidden diagnostics page: `http://routerlogin.net/debug.htm` (WBD / BH Management log capture, Save Log → `Debug_log.zip`, BH Optimization). This firmware has no telnet toggle.
 
 ## Rules
