@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 import netgear_router as nr  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures")
+FAKE_DEBUG_ZIP = b"PK\x03\x04fixture"  # minimal stand-in for the router's Debug_log.zip download
 
 
 def read(name):
@@ -305,6 +306,12 @@ class HttpTransportTests(unittest.TestCase):
                 if not self._auth_ok():
                     return
                 name = self.path.lstrip("/").split("?")[0]
+                if name == "Debug_log.zip":
+                    # Served from code: *.zip files are gitignored/forbidden in this repo.
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(FAKE_DEBUG_ZIP)
+                    return
                 p = os.path.join(FIX, name)
                 if not os.path.isfile(p):
                     self.send_response(404)

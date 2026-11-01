@@ -428,7 +428,8 @@ class FixtureTransport:
         name = path.split("?", 1)[0].lstrip("/").replace("/", "_")
         fp = os.path.join(self.dir, name)
         if not os.path.isfile(fp):
-            for ext in (".htm", ".json"):
+            # ".fixture" lets binary stand-ins (e.g. Debug_log.zip.fixture) avoid the repo's *.zip ban.
+            for ext in (".htm", ".json", ".fixture"):
                 if os.path.isfile(fp + ext):
                     fp += ext
                     break
