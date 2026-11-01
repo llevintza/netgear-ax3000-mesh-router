@@ -106,7 +106,7 @@ Verified chain: `bh_opt.cgi` → `mesh_service enable_bhopt` → `wb_cli -m bhop
 
 ## 8. Recommended actions (in order)
 1. **Collect evidence first.** Read status, enable WBD + BH Management capture on the router **and both satellites**, wait for a red event, save all three zips, and run the analyzer. The fix for DFS needs a non-web-interface change, so confirm radar is really the trigger before making it.
-2. Make sure all units run **1.0.5.50_2.0.70** (satellites first).
+2. Make sure all units run **1.0.5.50_2.0.70** (satellites first). **Check each satellite's own `currentsetting.htm`**, since the router can show a blank version. In this home, a satellite firmware mismatch was the actual root cause (§10).
 3. **If the logs show radar/DFS:**
    - Lower the 5 GHz width to **80 MHz** and use channel **36/40/44/48** (non-DFS at 80 MHz). This isn't possible through the web interface (§4). Options:
      - (a) the Nighthawk app, if it offers a 5 GHz mode setting (unverified)
@@ -120,5 +120,42 @@ Verified chain: `bh_opt.cgi` → `mesh_service enable_bhopt` → `wb_cli -m bhop
 ## 9. Open questions (need live data)
 - Does the satellite actually stay at `/160` when the router is at HT80 (`cb_satallite_wl1_chanspec`)?
 - Does the Nighthawk app expose the 5 GHz mode? Does `Set5GWLANWPAPSKByPassphrase` with an empty passphrase leave the Wi-Fi password unchanged?
-- Is the router's current setting really the factory HT160/44 (`netgear_router.py status` shows `wlg_mode`)?
-- Do the satellites accept the same admin login on their own `debug.htm`?
+- ~~Is the router's current setting really the factory HT160/44?~~ **Answered (§10):** yes, `wlg_mode=HT160`, `wlg_channel=44`.
+- ~~Do the satellites accept the same admin login on their own `debug.htm`?~~ **Answered (§10):** only after the satellites run the same firmware as the router.
+
+## 10. Live session 2026-11-01: root cause was a satellite firmware mismatch
+Evidence: `tools/netgear_router.py status` / `capture save` on all three units, `tools/analyze_logs.py`, and a 5 s ping monitor. Raw files are in gitignored `logs/`.
+
+**Before (router 1.0.5.50_2.0.70, both satellites V1.0.1.22_2.0.47):**
+- The firmware versions came from each unit's unauthenticated `currentsetting.htm`. The router's satellite table and Router Update page showed a **blank** satellite version, so the mismatch wasn't visible there.
+- Board IDs (from `currentsetting.htm` and the `.chk` headers): the MR70 is `U12H414T02_NETGEAR` and the MS70 is `U12H414T20_NETGEAR`.
+- Both satellites logged `AP-Autoconfiguration search count N exceeds threshold of 5 … blocking backhaul BSS` every 5 s. This is wbd_slave's `wbd_ap_config_search_thld=5` path (`FUN_0001696c` → `FUN_00062f70`): the old agent never completed EasyMesh autoconfiguration with the newer controller.
+- One satellite's crash record held a kernel NULL-pointer dereference in `wl1-kthrd` (`wlc_ratesel_set_link_bw` / `wlc_scb_ratesel_init`, closed `wl` driver).
+- There were **no radar/DFS lines** in any log, and the analyzer's verdict was LINK DROP WITHOUT RADAR.
+- The router was configured HT160/44 but actually ran **channel 161 at 80 MHz**, and the satellites followed 161. The cause of that move isn't in the logs (inferred: an earlier channel change that predates the capture).
+- Satellite web UI: login landed on `IA_hijack.htm` ("Your Satellite is not connecting to the network"). There was no `debug_frame.htm`; `debug.htm` holds the form directly. The satellites accepted the **factory default admin login**, not the router's password.
+- Satellite clients appeared as attached to the router, not to the satellite.
+
+**Updating the satellites:**
+- A manual upload of the MS70 1.0.5.50 `.chk` on a satellite's own hidden `UPG_upgrade.htm` (`upgrade_check.cgi`) was **rejected** ("This firmware file is incorrect"), even though the board ID matches. The satellite's `httpd_mt` log records the upload but no reason.
+- The owner then updated all three units successfully. Which route worked isn't recorded yet; the release notes' route is ADVANCED → Administration → Router Update → Manual Update → satellite row → popup, satellites first, then the router.
+
+**After (all three on 1.0.5.50_2.0.70):**
+- All LEDs are solid blue, there's no `IA_hijack` page, and satellite clients now show as attached to their satellite.
+- **0** autoconfig-threshold lines and **0** `wl` panics on either satellite. The only "oops/NULL" hits are harmless kernel messages (`oopsWriterDoIoctl` timezone, `bsd` setitimer).
+- The satellites now accept the **router's admin password**. The default credential is gone (inferred: synced from the controller).
+- All three units are on **44/160** ("Up to 2400 Mbps"). So the radio now spans DFS 52–64 again (§4), and DFS remains a latent risk; watch for `RADAR DETECTED` lines.
+- The router's satellite table still lists only one satellite row. Its Router Update satellite list shows both satellites at V1.0.5.50.
+- Backhaul metrics over an 11 min window (wbd `Ifname[wl1.1] … DWDS … RSSI[…] macThroughPutCapacity`):
+
+  | Satellite | RSSI min / median / max | Samples below the −75 weak threshold | Median capacity |
+  |---|---|---|---|
+  | Satellite-1 | −78 / −76 / −68 dBm | 434 of 706 | 544 Mbps |
+  | Satellite-2 | −58 / −56 / −54 dBm | 0 of 706 | 1921 Mbps |
+
+  Satellite-1 sits just below the §5 weak threshold, so wbd_master keeps flagging it `weak=YES` and attempts steering. It didn't drop in that window. It's the candidate for relocation if drops recur.
+- The satellites' internal `InternetConnectionStatus=Down` on `currentsetting.htm` is the same before and after, so it isn't a fault indicator for satellites.
+
+**Lessons:**
+- Check each satellite's firmware on its own `http://<satellite>/currentsetting.htm` (no login needed). The router's table can show a blank version.
+- Don't use a satellite's own hidden upgrade page for a large version jump. It rejected the correct image.

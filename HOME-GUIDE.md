@@ -31,7 +31,9 @@ Record from the output:
 - **configured channel** (expected 44) and the **in-use 5G Channel** row (at HT160 it lists the whole block, e.g. `36(P)+40+…+64`)
 - the **satellite table**: IP address, 2.4/5 GHz or wired, connected to Router or Satellite
 
-Then check each satellite with `--host <satellite-ip> status`. Whether the satellite accepts the same admin login is unverified. If it doesn't, use the browser.
+**Check each satellite's firmware on the satellite itself:** `curl -s http://<satellite-ip>/currentsetting.htm` (no login) prints `Firmware=V…`. The router's satellite table can show a **blank** version, which hid a satellite firmware mismatch that turned out to be the root cause (FINDINGS §10).
+
+Then check each satellite with `--host <satellite-ip> status`. On matching firmware, satellites accept the router's admin password. On old satellite firmware they used the factory default login.
 
 **Browser fallback:** ADVANCED → Administration → **Router Status** (5G Channel row) and **Attached Devices** (Connected Satellite table). The version is in the page header. Note: the "Backhaul Status" column always says "Good"; it's a fixed label, not a measurement.
 
@@ -53,6 +55,9 @@ The tool doesn't upload firmware. Do this in the browser:
 2. **Satellites first:** click a satellite's row in the satellite table. Its own Router Update page opens in a **new tab** (allow pop-ups). Log in, choose `firmware/MS70-V1.0.5.50_2.0.70/MS70-V1.0.5.50_2.0.70.chk` → Upload. Repeat for the other satellite.
 3. **Then the router:** on the Manual Update tab, Browse → `firmware/MR70-V1.0.5.50_2.0.70/MR70-V1.0.5.50_2.0.70.chk` → Upload.
 4. Don't unplug anything. Wait until all LEDs are steady. Updating restarts the units, so restart the capture (Step 3) afterwards.
+5. Confirm with `currentsetting.htm` on every unit (Step 2).
+
+> Uploading the MS70 image on a satellite's own hidden `UPG_upgrade.htm` page was rejected with "This firmware file is incorrect" on 1.0.1.22, even though the file was correct. Use the router's update flow instead (FINDINGS §10).
 
 ## Step 5: Agent, save logs and get a verdict (5 min)
 ```bash

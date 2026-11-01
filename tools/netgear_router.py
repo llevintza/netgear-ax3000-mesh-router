@@ -508,7 +508,10 @@ def debug_checkbox_state(form):
             continue
         val = form.hidden(hidden)
         if val is None:
-            raise LayoutError("debug form 1 lacks hidden field %s" % hidden)
+            # The satellite (MS70 www/debug.htm) has e.g. accel_debug without an ACCEL_debug hidden field
+            # and no isChecked() rule for it, so a browser always shows it unticked. Mirror that.
+            state[box] = False
+            continue
         state[box] = val in on_values
     return state
 
@@ -721,7 +724,15 @@ def cmd_status(rt, args):
 # ------------------------------------------------------------------- commands
 
 def _debug_forms(rt):
-    page, forms = rt.page_forms("debug_frame.htm")
+    # Router (MR70): debug.htm is a frameset around debug_frame.htm.
+    # Satellite (MS70): no debug_frame.htm; debug.htm itself holds the same forms (MS70 www/debug.htm),
+    # plus satellite-only controls (reset_bh_bssid in form 1, Enable Telnet in form 3) that must never be sent.
+    try:
+        page, forms = rt.page_forms("debug_frame.htm")
+    except RouterError as e:
+        if "HTTP 404" not in str(e):
+            raise
+        page, forms = rt.page_forms("debug.htm")
     return forms
 
 

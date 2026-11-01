@@ -12,6 +12,7 @@ The approach is to reverse-engineer the official firmware (**1.0.5.50_2.0.70**) 
 | How to work on this repo (developers and coding agents) | [AGENTS.md](AGENTS.md) |
 
 ## Short version
+- **Outcome (2026-11-01):** the satellites were still on V1.0.1.22 while the router ran 1.0.5.50. The router showed a blank satellite version, so this wasn't obvious. With the old firmware the satellites never finished mesh autoconfiguration and kept blocking their backhaul. Updating all units to 1.0.5.50 fixed it: LEDs blue, no blocking loop. See [FINDINGS.md §10](FINDINGS.md#10-live-session-2026-11-01-root-cause-was-a-satellite-firmware-mismatch).
 - The red LED means the satellite has lost contact with the router: about 25 s of failed pings, or the 5 GHz link dropping (decompiled from `acos_agent`).
 - The backhaul shares the 5 GHz radio with the clients. By factory default that radio runs at **160 MHz on channel 44**, a block that always includes DFS (radar) channels 52–64. A radar detection forces the radio off the block and cuts the satellites off.
 - The web interface can't change the width, so changing only the channel doesn't help. Leading fixes: 80 MHz width with channel 36–48 (outside the web interface), or wired backhaul. **Confirm the trigger with logs first:** see [HOME-GUIDE.md](HOME-GUIDE.md), which an agent can mostly run for you with `tools/netgear_router.py` and `tools/analyze_logs.py`.

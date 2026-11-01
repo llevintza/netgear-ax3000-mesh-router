@@ -116,6 +116,41 @@ class DebugBuilderTests(unittest.TestCase):
         self.assertEqual(nr.build_bh_opt(bh), [("bh_opt_setting", "bh_opt"), ("bh_opt_state", "")])
 
 
+class SatelliteDebugPageTests(unittest.TestCase):
+    """MS70 satellites serve the debug forms on debug.htm itself (no debug_frame.htm)."""
+
+    class StubRouter:
+        def __init__(self, error):
+            self.error = error
+            self.asked = []
+
+        def page_forms(self, path):
+            self.asked.append(path)
+            if path == "debug_frame.htm":
+                raise self.error
+            text = read("debug_frame.htm")
+            return text, nr.parse_forms(text)
+
+    def test_falls_back_to_debug_htm_on_404(self):
+        rt = self.StubRouter(nr.RouterError("HTTP 404 for http://sat/debug_frame.htm"))
+        forms = nr._debug_forms(rt)
+        self.assertEqual(rt.asked, ["debug_frame.htm", "debug.htm"])
+        self.assertIsNotNone(nr.find_form(forms, "newdebug.cgi", {"form": "1"}))
+
+    def test_other_errors_propagate(self):
+        rt = self.StubRouter(nr.RouterError("HTTP 500 for http://sat/debug_frame.htm"))
+        with self.assertRaises(nr.RouterError):
+            nr._debug_forms(rt)
+        self.assertEqual(rt.asked, ["debug_frame.htm"])
+
+    def test_missing_hidden_field_reads_as_unticked(self):
+        text = read("debug_frame.htm")
+        stripped = "\n".join(line for line in text.splitlines() if 'name="MFP_disable"' not in line)
+        self.assertNotEqual(stripped, text)  # the fixture really had the hidden field
+        f1 = nr.find_form(nr.parse_forms(stripped), "newdebug.cgi", {"form": "1"})
+        self.assertFalse(nr.debug_checkbox_state(f1)["mfp_disable"])
+
+
 class ChannelTests(unittest.TestCase):
     def test_us_with_fcc_dfs(self):
         ch = nr.offered_5g_channels(11, "US", "HT80", "1")
