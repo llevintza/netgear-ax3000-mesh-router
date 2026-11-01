@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start (or restart) the long-running "rea-mcp" container that Claude Code talks to
-# via `docker exec -i rea-mcp rea --mcp` (see .mcp.json).
+# Start (or restart) the long-running "rea-mcp" container. Any MCP-capable agent reaches REA
+# through it as a stdio server: `docker exec -i rea-mcp rea --mcp` (see AGENTS.md).
 #
 # - Project dir is mounted at the SAME absolute path, so host paths work inside the container.
 #   firmware/ is mounted read-only on top.
