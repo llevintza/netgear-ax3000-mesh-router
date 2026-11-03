@@ -23,8 +23,10 @@ If the versions differ, update the satellites first and then the router, through
 | Fix my own MR70/MS70 mesh, step by step | [docs/troubleshooting-playbook.md](docs/troubleshooting-playbook.md) |
 | See a real session from symptoms to fix | [docs/case-study-2026-11.md](docs/case-study-2026-11.md) |
 | Understand the firmware behavior, with evidence | [docs/findings.md](docs/findings.md) |
-| See what's planned (VPN, Pi-hole, custom firmware research) | [docs/roadmap.md](docs/roadmap.md) and the [issues](../../issues) |
-| Work on the repo (humans and coding agents) | [AGENTS.md](AGENTS.md) |
+| See what's planned (custom firmware, VPN, Pi-hole) and in what order | [docs/roadmap.md](docs/roadmap.md) and the pinned roadmap issue (#26) |
+| Back up, install or roll back firmware | [docs/firmware-playbook.md](docs/firmware-playbook.md) |
+| Contribute (branches, conventional commits, PRs) | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Work on the repo as a coding agent | [AGENTS.md](AGENTS.md) |
 | Report a problem safely | [SECURITY.md](SECURITY.md) |
 
 ## Key findings (short)
@@ -67,7 +69,7 @@ AGENTS.md          instructions for coding agents (CLAUDE.md just imports it)
 ```
 
 ## Contributing
-Run the checks before every commit:
+All changes go through a feature branch and a PR against `main`, with conventional commits. See [CONTRIBUTING.md](CONTRIBUTING.md). Run the checks before every commit:
 ```bash
 git config core.hooksPath .githooks   # once per clone
 tools/check-repo.sh                   # forbidden files, gitleaks, private-data guard, shellcheck, tests
