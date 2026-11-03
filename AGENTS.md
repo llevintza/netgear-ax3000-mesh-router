@@ -4,8 +4,18 @@ Instructions for any coding agent working in this repo. This file is the single 
 
 ## What this repo is
 Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** satellites, Costco MK73S kit) whose satellites lose their wireless backhaul (LED white → red, clients drop). The method: reverse-engineer the official firmware (**1.0.5.50_2.0.70**) with **REA** (github.com/morluto/rea), then turn the findings into config, placement and firmware fixes. **This is a public repo.**
-- **Scope: analysis and configuration.** Custom firmware is a gated research track ([docs/roadmap.md](docs/roadmap.md)): don't build router images, repack or flash anything unless the owner explicitly asks. REA can't repack images, and the mesh/Wi-Fi drivers are closed Broadcom binaries.
+- **Goal and scope:** the end goal is a custom MR70/MS70 firmware that keeps every stock behavior and is built and published by CI ([docs/roadmap.md](docs/roadmap.md), tracking issue #26). The work is ordered in milestones M0–M6.
+  - **Building** images in Docker/CI is in scope once its issue is reached (M4, #17).
+  - **Flashing** a unit is never done without an explicit owner request, and goes to the spare unit first, after the recovery path (#9) and a backup (#15) exist.
+  - REA can't repack images, and the mesh/Wi-Fi drivers are closed Broadcom binaries.
 - Current state of knowledge: [docs/findings.md](docs/findings.md). Procedure for owners: [docs/troubleshooting-playbook.md](docs/troubleshooting-playbook.md). Worked example: [docs/case-study-2026-11.md](docs/case-study-2026-11.md).
+
+## Git workflow (hard rules)
+- **Never commit on `main`, never push to `main`.** All work happens on a feature branch from an up-to-date `main`, named `<type>/<issue>-<slug>` (the issue footer names it).
+- **One issue = one branch = one PR against `main`.** The PR body says `Closes #N`. Found more work? Open a new issue; don't grow the PR.
+- **Conventional Commits** for every commit message and PR title: `feat|fix|docs|test|refactor|build|ci|chore(<scope>): <summary>`. Scopes and details are in [CONTRIBUTING.md](CONTRIBUTING.md). Releases (semver) are derived from these, so pick the type carefully.
+- **Work the backlog in order:** milestones M0 → M6 and issues top to bottom ([docs/roadmap.md](docs/roadmap.md), #26). Don't start an issue whose `Depends on:` items are still open unless the owner says so.
+- Run `tools/check-repo.sh` before every commit. Open the PR with the template filled in, and leave merging to the owner.
 
 ## Layout
 | Path | Tracked | Contents |
@@ -13,7 +23,9 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 | `docs/findings.md` | yes | Evidence-backed analysis; **update it when you learn something** |
 | `docs/troubleshooting-playbook.md` | yes | Step-by-step procedure for owners (firmware parity first) |
 | `docs/case-study-2026-11.md` | yes | One real session, step by step, no device identifiers |
-| `docs/roadmap.md` | yes | Stock features, Raspberry Pi services, gated custom-firmware research |
+| `docs/roadmap.md` | yes | End goal, milestones M0–M6 with issue order, dependency graph, research log |
+| `docs/firmware-playbook.md` | yes | Back up → build → verify → install → roll back (sections filled by #15, #17–#20) |
+| `CONTRIBUTING.md`, `.github/pull_request_template.md` | yes | Branch/commit/PR workflow and PR checklist |
 | `LICENSE`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/` | yes | MIT license, what never to post publicly, redaction checklist |
 | `tools/Dockerfile` | yes | `rea-fw` image: REA 6.8.0, binwalk 3.1.0, unblob 26.6.4, sasquatch, JDK 21, Ghidra 12.1.4 |
 | `tools/fetch-and-extract.sh` | yes | Download → SHA-256 verify → REA region scan → REA rootfs extraction |
