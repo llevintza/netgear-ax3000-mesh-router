@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """netgear_router.py - drive the Netgear MR70 (fw 1.0.5.50_2.0.70) web UI from a shell.
 
-Stdlib only. Lets an agent or a person at home do the HOME-GUIDE web steps:
+Stdlib only. Lets an agent or a person at home do the troubleshooting-playbook web steps (docs/troubleshooting-playbook.md):
 read status, toggle the debug.htm log captures, start/save a capture, pin the
 5 GHz channel, and start BH optimization.
 

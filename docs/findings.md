@@ -3,7 +3,7 @@
 Firmware analyzed: **1.0.5.50_2.0.70** (2026-09-29), MR70 and MS70, extracted with REA 6.8.0 (`rea extract-firmware`).
 Paths below are relative to `extracted/<MODEL>/selected.bin_extract/`.
 
-Status (2026-11-01): static analysis done; `acos_agent`, `acsd2`, `wbd_slave`, `wbd_master`, `httpd` and `libwlanUtil` decompiled (Ghidra 12.1.4 via REA). **Live data from the units is still needed** to confirm the trigger (DFS radar vs. weak signal); see §8 and HOME-GUIDE.md. "Verified" = read in decompiled code or page source; "inferred" = not proven.
+Status (2026-11-01): static analysis done; `acos_agent`, `acsd2`, `wbd_slave`, `wbd_master`, `httpd` and `libwlanUtil` decompiled (Ghidra 12.1.4 via REA). **Resolved on a real system:** the trigger there was a satellite firmware mismatch, not DFS (§10, full write-up in [case-study-2026-11.md](case-study-2026-11.md)). §2–§6 still describe how the firmware behaves and remain relevant for other homes. "Verified" = read in decompiled code or page source; "inferred" = not proven.
 
 ## 1. Platform: Broadcom, dual-band mesh with a shared 5 GHz backhaul
 - SoC **Broadcom BCM6756**, BCA SDK 5.04L.02p1 (FIT header in the `.chk`; `Lflash=nand;chip=6756`).
@@ -47,7 +47,7 @@ Wi-Fi link check `FUN_0001251c` (`check_satellite_uplink_conn`), when the 5 GHz 
 - **"Controller device … removed. Blocking backhaul BSS"** (`FUN_000632f4`): fires when ieee1905 drops the router from its topology after no 1905 traffic for the discovery interval + 2 s, capped at **62 s** (`FUN_0002b5e4`, `FUN_00029448`).
 - **Order of events:** the LED goes red at ~25 s (§2), then satellite clients lose Wi-Fi at ~30–62 s. Both recover once the router is reachable again.
 
-## 4. 5 GHz runs at 160 MHz and always includes DFS channels (prime suspect)
+## 4. 5 GHz runs at 160 MHz and always includes DFS channels (latent risk)
 
 > **Correction (2026-11-01).** An earlier version of this section blamed automatic channel selection (`acsd2`, `wl1_acs_dfs=2`, …) for picking DFS channels, and recommended pinning channel 36–48. **That mechanism was wrong**, and pinning a channel alone does **not** avoid DFS. Details below.
 
@@ -93,7 +93,9 @@ Verified chain: `bh_opt.cgi` → `mesh_service enable_bhopt` → `wb_cli -m bhop
 
 ## 7. Diagnostics and logs
 - **`http://<unit>/debug.htm`** (frame around `www/debug_frame.htm`): WBD Log Capture, BH Management Log Capture, Start Capture (System Memory), **Save Debug Log** → `Debug_log.zip`.
-  - Ticks post to `newdebug.cgi` and **persist across reboots**. No telnet toggle.
+  - Ticks post to `newdebug.cgi` and **persist across reboots**.
+  - Satellites (MS70) have no `debug_frame.htm`: `debug.htm` holds the forms directly, plus satellite-only controls (`reset_bh_bssid`, an **Enable Telnet** control in form 3).
+  - **Correction:** an earlier version said "no telnet toggle". That's true for the router's `debug_frame.htm`. But the MS70 `www/debug.htm` has an **Enable Telnet** checkbox (`action_Enable_Telnet`, line 354), and both rootfs ship `usr/sbin/telnetenabled` and `usr/sbin/utelnetd`. It is unexplored and was never used here (roadmap item). An open telnet shell on a LAN is a security risk, so leave it off.
   - **The router and each satellite have their own `debug.htm`;** the router's zip does **not** include satellite logs.
 - **What's in `Debug_log.zip`** (verified, the httpd `zip -l Debug_log.zip …` command):
   - `syslogd.txt` (logread): acos_agent lines, plus WBD lines only when `wbd_syslogd_output=1`, which the WBD checkbox appears to set (inferred).
@@ -102,7 +104,10 @@ Verified chain: `bh_opt.cgi` → `mesh_service enable_bhopt` → `wb_cli -m bhop
   - It also bundles packet captures, `nvram.zip` and `backup.cfg`, which can contain credentials, so **keep the zips private** (`logs/` is gitignored).
 - **Not in any log:** `acsd2` messages go to the console only, so radar evidence comes from the **WBD** lines (`RADAR DETECTED`, `AP_CHAN_CHANGE`).
 - **Analyzer:** `python3 -I tools/analyze_logs.py logs/*.zip` builds a classified incident timeline with a verdict: DFS/radar, weak RSSI, non-radar channel change, link drop, controller unreachable while link up, or MIXED.
-- **Router control:** `tools/netgear_router.py` covers status, debug-logs, capture start/save, set-5g-channel and bh-optimize. Changes are dry-run unless `--apply` is given. It has **not been tested on a live router.**
+- **Router control:** `tools/netgear_router.py` covers status, debug-logs, capture start/save, set-5g-channel and bh-optimize. Changes are dry-run unless `--apply` is given.
+  - Tested live on MR70 and MS70 1.0.5.50 (and MS70 1.0.1.22): `status`, `debug-logs`, `capture start/save`.
+  - `set-5g-channel` and `bh-optimize` have only been dry-run.
+  - The satellite `status` parsing is incomplete (no `top.htm`; 5G rows are inside HTML comments).
 
 ## 8. Recommended actions (in order)
 1. **Collect evidence first.** Read status, enable WBD + BH Management capture on the router **and both satellites**, wait for a red event, save all three zips, and run the analyzer. The fix for DFS needs a non-web-interface change, so confirm radar is really the trigger before making it.
@@ -124,7 +129,7 @@ Verified chain: `bh_opt.cgi` → `mesh_service enable_bhopt` → `wb_cli -m bhop
 - ~~Do the satellites accept the same admin login on their own `debug.htm`?~~ **Answered (§10):** only after the satellites run the same firmware as the router.
 
 ## 10. Live session 2026-11-01: root cause was a satellite firmware mismatch
-Evidence: `tools/netgear_router.py status` / `capture save` on all three units, `tools/analyze_logs.py`, and a 5 s ping monitor. Raw files are in gitignored `logs/`.
+Narrative and step-by-step: [case-study-2026-11.md](case-study-2026-11.md). Evidence: `tools/netgear_router.py status` / `capture save` on all three units, `tools/analyze_logs.py`, and a 5 s ping monitor. Raw files are in gitignored `logs/`.
 
 **Before (router 1.0.5.50_2.0.70, both satellites V1.0.1.22_2.0.47):**
 - The firmware versions came from each unit's unauthenticated `currentsetting.htm`. The router's satellite table and Router Update page showed a **blank** satellite version, so the mismatch wasn't visible there.

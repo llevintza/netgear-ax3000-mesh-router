@@ -9,3 +9,7 @@ analysis/
 __pycache__/
 *.pyc
 .claude/settings.local.json
+research/
+*.swp
+.DS_Store
+.private-denylist

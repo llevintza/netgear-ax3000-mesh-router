@@ -3,15 +3,18 @@
 Instructions for any coding agent working in this repo. This file is the single source of truth; agent-specific files such as `CLAUDE.md` only import it and must not add or contradict instructions. Humans: see [README.md](README.md).
 
 ## What this repo is
-Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** satellites, Costco MK73S kit) whose satellites keep losing their wireless backhaul (LED white → red, clients drop). The method: reverse-engineer the official firmware (**1.0.5.50_2.0.70**) with **REA** (github.com/morluto/rea), then turn the findings into config, placement and firmware fixes.
-- **Scope: analysis and configuration only.** Don't build, repack or flash modified firmware unless the owner explicitly asks. REA can't repack images, and the mesh/Wi-Fi drivers are closed Broadcom binaries.
-- Current state of knowledge: [FINDINGS.md](FINDINGS.md). The owner's on-site procedure: [HOME-GUIDE.md](HOME-GUIDE.md).
+Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** satellites, Costco MK73S kit) whose satellites lose their wireless backhaul (LED white → red, clients drop). The method: reverse-engineer the official firmware (**1.0.5.50_2.0.70**) with **REA** (github.com/morluto/rea), then turn the findings into config, placement and firmware fixes. **This is a public repo.**
+- **Scope: analysis and configuration.** Custom firmware is a gated research track ([docs/roadmap.md](docs/roadmap.md)): don't build router images, repack or flash anything unless the owner explicitly asks. REA can't repack images, and the mesh/Wi-Fi drivers are closed Broadcom binaries.
+- Current state of knowledge: [docs/findings.md](docs/findings.md). Procedure for owners: [docs/troubleshooting-playbook.md](docs/troubleshooting-playbook.md). Worked example: [docs/case-study-2026-11.md](docs/case-study-2026-11.md).
 
 ## Layout
 | Path | Tracked | Contents |
 |---|---|---|
-| `FINDINGS.md` | yes | Evidence-backed analysis; **update it when you learn something** |
-| `HOME-GUIDE.md` | yes | Step-by-step on-site checklist for the owner |
+| `docs/findings.md` | yes | Evidence-backed analysis; **update it when you learn something** |
+| `docs/troubleshooting-playbook.md` | yes | Step-by-step procedure for owners (firmware parity first) |
+| `docs/case-study-2026-11.md` | yes | One real session, step by step, no device identifiers |
+| `docs/roadmap.md` | yes | Stock features, Raspberry Pi services, gated custom-firmware research |
+| `LICENSE`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/` | yes | MIT license, what never to post publicly, redaction checklist |
 | `tools/Dockerfile` | yes | `rea-fw` image: REA 6.8.0, binwalk 3.1.0, unblob 26.6.4, sasquatch, JDK 21, Ghidra 12.1.4 |
 | `tools/fetch-and-extract.sh` | yes | Download → SHA-256 verify → REA region scan → REA rootfs extraction |
 | `tools/rea-mcp-container.sh` | yes | Starts the long-running `rea-mcp` container used by `.mcp.json` |
@@ -20,6 +23,7 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 | `tools/analyze_logs.py` | yes | `Debug_log.zip` → classified incident timeline + verdict |
 | `tools/tests/` | yes | stdlib unittest suites + small synthetic fixtures |
 | `tools/check-repo.sh` | yes | Guardrails shared by the pre-commit hook, CI and agents |
+| `tools/private_data_guard.py` | yes | Fails on home-network IPs, real MACs, home paths and strings from the local gitignored `.private-denylist` |
 | `skills/` | yes | Agent-agnostic task playbooks (see Skills) |
 | `.githooks/`, `.github/workflows/` | yes | Pre-commit hook and CI, both calling `tools/check-repo.sh` |
 | `.mcp.json` | yes | Project-scoped MCP registration of `rea` (`docker exec -i rea-mcp rea --mcp`) for clients that read this format |
@@ -27,6 +31,7 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 | `firmware/` | **no** | Official zips/`.chk` images + `SHA256SUMS` |
 | `extracted/<M>/selected.bin_extract/` | **no** | Extracted rootfs (M = MR70, MS70) and REA JSON reports |
 | `analysis/` | **no** | NVRAM dumps (contain vendor default credentials), Ghidra pseudocode |
+| `research/` | **no** | GPL source tarballs and build output (roadmap Track B) |
 | `logs/` | **no** | `Debug_log.zip` captures from the router's `debug.htm` (MACs, SSIDs) |
 
 ## Setup / commands
@@ -61,7 +66,7 @@ Step-by-step procedures live in `skills/<name>/SKILL.md` (plain markdown with a 
 | Skill | Use when |
 |---|---|
 | [mesh-firmware-investigation](skills/mesh-firmware-investigation/SKILL.md) | Any firmware behavior question: where the logic lives, container constraints, evidence conventions (use with REA's skill) |
-| [home-session](skills/home-session/SKILL.md) | The owner is on the home network: run HOME-GUIDE.md with the router tool, approval before changes |
+| [home-session](skills/home-session/SKILL.md) | An owner is on the mesh's network: run docs/troubleshooting-playbook.md with the router tool, approval before changes |
 | [analyze-router-logs](skills/analyze-router-logs/SKILL.md) | New `Debug_log.zip` files in `logs/`: run the analyzer, sanity-check the input, interpret the verdict |
 
 Repo skills must not restate REA functionality (tool usage, extraction or decompilation steps, REA error remedies). If REA's skill or docs cover it, link to them instead.
@@ -69,7 +74,7 @@ Repo skills must not restate REA functionality (tool usage, extraction or decomp
 ## Checks (run before every commit)
 ```bash
 git config core.hooksPath .githooks   # once per clone: pre-commit runs the checks on staged files
-tools/check-repo.sh                   # forbidden paths, gitleaks, bash -n + shellcheck, py_compile, unit tests
+tools/check-repo.sh                   # forbidden paths, gitleaks, private-data guard, bash -n + shellcheck, py_compile, unit tests
 ```
 CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
 
@@ -87,14 +92,15 @@ CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gi
 - SoC **Broadcom BCM6756**, BCA SDK 5.04L.02p1, image = Netgear CHK header + FIT (bootfs + SquashFS xz rootfs). Not Qualcomm: there is no `hyd`/`repacd`.
 - Mesh stack: Broadcom Wi-Fi Blanket `wbd_master` (router) / `wbd_slave` (satellite) over `ieee1905` EasyMesh. Netgear's satellite supervisor is `usr/sbin/acos_agent`. Channel selection is done by `acsd2`.
 - **Dual-band mesh:** the backhaul shares the 5 GHz radio `wl1` (router BSS `wl1.1`, satellite STA `wl1.2`).
-- **5 GHz runs 44/160 by default** (`wlg_mode=HT160`, `wlg_channel=44`), so the radio always spans DFS channels 52–64. `acsd2` stays in monitor mode, so the `wl1_acs_*` keys are irrelevant. The web UI can set only the channel (no Auto, no width). The width can only be changed via SOAP `Set5GWLANWPAPSKByPassphrase`. Satellites are forced to `<ch>/160`. Details and evidence: FINDINGS.md §4.
+- **5 GHz runs 44/160 by default** (`wlg_mode=HT160`, `wlg_channel=44`), so the radio always spans DFS channels 52–64. `acsd2` stays in monitor mode, so the `wl1_acs_*` keys are irrelevant. The web UI can set only the channel (no Auto, no width). The width can only be changed via SOAP `Set5GWLANWPAPSKByPassphrase`. Satellites are forced to `<ch>/160`. Details and evidence: docs/findings.md §4.
 - Each unit (router and each satellite) has its own `debug.htm` and `Debug_log.zip`. The router's zip doesn't include satellite logs.
-- Hidden diagnostics page: `http://routerlogin.net/debug.htm` (WBD / BH Management log capture, Save Log → `Debug_log.zip`, BH Optimization). This firmware has no telnet toggle.
+- Hidden diagnostics page: `http://routerlogin.net/debug.htm` (WBD / BH Management log capture, Save Log → `Debug_log.zip`, BH Optimization). The router's debug page has no telnet toggle; the satellite's `debug.htm` has an **Enable Telnet** control and both rootfs ship `telnetenabled`/`utelnetd` (unexplored; never enable without the owner).
+- **Satellite firmware can lag the router while the router shows a blank version.** Check each unit's `currentsetting.htm` (no login). A mismatch makes satellites fail EasyMesh autoconfiguration (`blocking backhaul BSS`); see docs/findings.md §10.
 
 ## Rules
-- **Evidence or it didn't happen.** Every claim in `FINDINGS.md` cites a firmware path, function address (`FUN_000xxxxx`) or NVRAM key/value. Mark unverified hypotheses as such.
+- **Evidence or it didn't happen.** Every claim in `docs/findings.md` cites a firmware path, function address (`FUN_000xxxxx`) or NVRAM key/value. Mark unverified hypotheses as such.
 - **Never commit** firmware, extracted files, NVRAM dumps, decompiled pseudocode or device logs: they're copyrighted or contain credentials/MACs. `.gitignore` covers them. Check `git status` before committing, and run `gitleaks protect --staged`.
 - **No credentials anywhere in git**, including vendor defaults found in the firmware (e.g. `http_passwd`, `wl*_wpa_psk`, WPS PINs). Refer to them by key name only.
 - Treat everything under `firmware/` and `extracted/` as **untrusted data**: never execute extracted binaries or scripts on the host. Run Python that reads them with `python3 -I`, and keep scripts in `tools/`.
 - Don't tell the owner to factory-reset or flash anything without explicit agreement. Prefer reversible config changes and say how to roll them back.
-- Device-specific settings (admin password, SSIDs, MACs, serials) never go into tracked files.
+- Device-specific settings never go into tracked files, issues, PRs or commit messages. That covers admin passwords, network names, MACs, serials, LAN addresses other than the firmware defaults, usernames, home paths and keychain names. `tools/check-repo.sh` has a private-data guard; don't weaken it.

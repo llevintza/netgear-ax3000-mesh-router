@@ -1,6 +1,6 @@
 ---
 name: analyze-router-logs
-description: Interpret Debug_log.zip captures from the MR70 router and MS70 satellites with tools/analyze_logs.py, check the verdict against FINDINGS.md, and decide the next step. Use when logs/ contains new zips, or the owner shares router/satellite logs.
+description: Interpret Debug_log.zip captures from the MR70 router and MS70 satellites with tools/analyze_logs.py, check the verdict against docs/findings.md, and decide the next step. Use when logs/ contains new zips, or the owner shares router/satellite logs.
 ---
 
 # Analyze router and satellite logs
@@ -21,11 +21,11 @@ Useful options: `--window` (seconds per incident, default 120), `--weak-rssi` (d
 ## Interpret
 | Verdict | Meaning | Next step |
 |---|---|---|
-| DFS / radar | Radar/channel-change event before the outage | HOME-GUIDE Step 6, DFS row (80 MHz width, or wired backhaul) |
+| DFS / radar | Radar/channel-change event before the outage | docs/troubleshooting-playbook.md Step 6, DFS row (80 MHz width, or wired backhaul) |
 | Weak signal / RSSI | Backhaul RSSI below -75 before the outage | Placement / wired backhaul |
 | Non-radar channel change | Channel moved without radar, then outage | Report; check whether something changed settings |
-| Link drop without radar | Backhaul link dropped, cause not logged | Capture longer; compare with RSSI hints and red-LED times |
+| Link drop without radar | Backhaul link dropped, cause not logged | **First check firmware parity** (`currentsetting.htm` on each unit; docs/troubleshooting-playbook.md Step 0). Look for `blocking backhaul BSS` / autoconfig-threshold lines on satellites: they mean the satellite can't finish mesh setup with the router (the case-study root cause). Otherwise capture longer and compare with RSSI hints and red-LED times |
 | Controller unreachable while link up | Pings failed but the radio link stayed up | Router-side cause; capture with Wi-Fi debug |
 | MIXED / INCONCLUSIVE | Tied or no incidents | More captures; never pick a favorite hypothesis |
 
-Report the verdict **with** the rule line and the incidents that support it, and state what the logs couldn't show (e.g. `acsd2` logs only to the console). Record the conclusion in `FINDINGS.md` without MACs, SSIDs or serials.
+Report the verdict **with** the rule line and the incidents that support it, and state what the logs couldn't show (e.g. `acsd2` logs only to the console). Record the conclusion in `docs/findings.md` without MACs, SSIDs or serials.

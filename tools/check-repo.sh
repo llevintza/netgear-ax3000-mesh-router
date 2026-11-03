@@ -15,8 +15,8 @@ else
   files=$(git ls-files -co --exclude-standard)
 fi
 
-echo "1/5 forbidden files (firmware, extracted data, dumps, logs, credentials)"
-bad=$(printf '%s\n' "$files" | /usr/bin/grep -E '^(firmware|extracted|analysis|logs)/|\.(chk|img|bin|zip|trx)$|(^|/)\.env$' || true)
+echo "1/6 forbidden files (firmware, extracted data, dumps, logs, credentials)"
+bad=$(printf '%s\n' "$files" | /usr/bin/grep -E '^(firmware|extracted|analysis|logs)/|\.(chk|img|bin|zip|trx)$|(^|/)\.env$|(^|/)\.private-denylist$|^research/' || true)
 if [ -n "$bad" ]; then
   note "ERROR: these must never be committed (copyrighted firmware or sensitive data):"
   printf '%s\n' "$bad" | sed 's/^/    /'
@@ -25,7 +25,7 @@ else
   note ok
 fi
 
-echo "2/5 secrets (gitleaks)"
+echo "2/6 secrets (gitleaks)"
 if command -v gitleaks >/dev/null; then
   if [ "$mode" = "--staged" ]; then leaks_cmd=(gitleaks protect --staged); else leaks_cmd=(gitleaks detect); fi
   if "${leaks_cmd[@]}" --no-banner --redact >/dev/null 2>&1; then
@@ -37,7 +37,14 @@ else
   note "WARN: gitleaks not installed, skipped (brew install gitleaks)"
 fi
 
-echo "3/5 shell scripts (bash -n, shellcheck)"
+echo "3/6 private data (home-network IPs, MACs, home paths, .private-denylist)"
+if printf '%s\n' "$files" | /usr/bin/grep -vE '\.(png|jpe?g|gif|ico|pdf|fixture)$' | tr '\n' '\0' | xargs -0 python3 -I tools/private_data_guard.py; then
+  note ok
+else
+  fail=1
+fi
+
+echo "4/6 shell scripts (bash -n, shellcheck)"
 sh_files=$(printf '%s\n' "$files" | /usr/bin/grep -E '\.sh$|^\.githooks/' || true)
 for f in $sh_files; do
   [ -f "$f" ] || continue
@@ -49,7 +56,7 @@ if [ -n "$sh_files" ] && command -v shellcheck >/dev/null; then
 fi
 note "done"
 
-echo "4/5 python (compile)"
+echo "5/6 python (compile)"
 py_files=$(printf '%s\n' "$files" | /usr/bin/grep -E '\.py$' || true)
 for f in $py_files; do
   [ -f "$f" ] || continue
@@ -57,7 +64,7 @@ for f in $py_files; do
 done
 note "done"
 
-echo "5/5 python tests (tools/tests)"
+echo "6/6 python tests (tools/tests)"
 if [ -d tools/tests ] && ls tools/tests/test_*.py >/dev/null 2>&1; then
   python3 -I -m unittest discover -s tools/tests -q || fail=1
 else
