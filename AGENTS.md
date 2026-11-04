@@ -13,7 +13,7 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 ## Git workflow (hard rules)
 - **Never commit on `main`, never push to `main`.** All work happens on a feature branch from an up-to-date `main`, named `<type>/<issue>-<slug>` (the issue footer names it).
 - **One issue = one branch = one PR against `main`.** The PR body says `Closes #N`. Found more work? Open a new issue; don't grow the PR.
-- **Conventional Commits** for every commit message and PR title: `feat|fix|docs|test|refactor|build|ci|chore(<scope>): <summary>`. Scopes and details are in [CONTRIBUTING.md](CONTRIBUTING.md). Releases (semver) are derived from these, so pick the type carefully.
+- **Conventional Commits** for every commit message and PR title: `feat|fix|docs|test|refactor|build|ci|chore|perf|revert(<scope>): <summary>`. Scopes and details are in [CONTRIBUTING.md](CONTRIBUTING.md). Releases (semver) are derived from these, so pick the type carefully.
 - **Work the backlog in order:** milestones M0 → M6 and issues top to bottom ([docs/roadmap.md](docs/roadmap.md), #26). Don't start an issue whose `Depends on:` items are still open unless the owner says so.
 - Run `tools/check-repo.sh` before every commit. Open the PR with the template filled in, and leave merging to the owner.
 
@@ -89,7 +89,7 @@ Repo skills must not restate REA functionality (tool usage, extraction or decomp
 git config core.hooksPath .githooks   # once per clone: pre-commit runs the checks, commit-msg checks the message
 tools/check-repo.sh                   # forbidden paths, gitleaks, private-data guard, bash -n + shellcheck, py_compile, unit tests
 ```
-CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. `.github/workflows/conventional-commits.yml` checks the PR title and commits. Both are required to merge into the protected `main`. Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
+CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. `.github/workflows/conventional-commits.yml` checks the PR title and commits. Both are required to merge into the protected `main`, which also requires the branch to be up to date and every review conversation resolved (details in CONTRIBUTING.md). Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
 
 ## Gotchas (each one cost time; don't rediscover them)
 - **REA output dirs must not be bind mounts (Colima-specific).** On Colima, REA fails with `cleanup_incomplete` / "Extraction directory identity changed". Write to `/work/out` (volume `rea-out` in `rea-mcp`), then `tar` it out.

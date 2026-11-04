@@ -25,7 +25,9 @@ These rules apply to humans and coding agents alike. Agents: [AGENTS.md](AGENTS.
    | `perf` | performance improvement |
    | `revert` | reverts an earlier commit |
 
-   - **Scopes:** `tools`, `docs`, `playbook`, `findings`, `roadmap`, `firmware`, `ci`, `skills`, `agents`.
+   - **Scopes** are optional. Common ones: `tools`, `docs`, `playbook`, `findings`, `roadmap`, `firmware`, `ci`, `skills`, `agents`. Any lowercase scope (`a-z0-9._/-`) is accepted; prefer one from this list.
+   - **Header:** only the first line is checked. The summary doesn't end with a period. Commit headers are at most 100 characters; PR titles at most 92, so GitHub's ` (#N)` squash suffix still fits.
+   - Git's own headers (`Merge …`, `Revert "…"`, `Reapply "…"`, `fixup!`/`squash!`/`amend!`) are accepted in commits so you can iterate, but never as a PR title.
    - **Breaking change** (e.g. a release that needs the recovery path to install or roll back): add `!` after the type/scope and a `BREAKING CHANGE:` footer → major release.
 4. **Run the checks** before every commit. With the hooks enabled, `pre-commit` runs them and `commit-msg` rejects non-conventional messages (`tools/check_commits.py`):
    ```bash
@@ -35,7 +37,7 @@ These rules apply to humans and coding agents alike. Agents: [AGENTS.md](AGENTS.
 5. **Open a PR against `main`.** The title is a conventional commit (it becomes the squash-merge message), and the body says `Closes #N`. Fill in the PR template. CI must pass: `checks`, plus `conventional-commits`, which checks the PR title and every commit in the PR.
 6. **Squash-merge** after review. It's the only merge method enabled; the PR title becomes the commit on `main`, and GitHub deletes the branch.
 
-`main` is protected: no direct pushes or force-pushes (admins included), and a PR can merge only once both CI checks pass.
+`main` is protected: no direct pushes or force-pushes (admins included). A PR can merge only once both CI checks pass, the branch is up to date with `main` (merge `main` in or use "Update branch"), and every review conversation is resolved.
 
 One PR per issue. If you find more work, open a new issue instead of growing the PR.
 
