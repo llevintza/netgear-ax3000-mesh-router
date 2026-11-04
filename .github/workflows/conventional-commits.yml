@@ -1,0 +1,27 @@
+name: conventional-commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need the base commit to list the PR's commits
+
+      - name: PR title (becomes the squash-merge commit message)
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: python3 -I tools/check_commits.py --title "$TITLE"
+
+      - name: Commit messages in this PR
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -I tools/check_commits.py --range "$BASE..$HEAD"
