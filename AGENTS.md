@@ -37,7 +37,8 @@ Troubleshooting a Netgear Nighthawk AX3000 mesh (**MR70** router + **MS70** sate
 | `tools/check-repo.sh` | yes | Guardrails shared by the pre-commit hook, CI and agents |
 | `tools/private_data_guard.py` | yes | Fails on home-network IPs, real MACs, home paths and strings from the local gitignored `.private-denylist` |
 | `skills/` | yes | Agent-agnostic task playbooks (see Skills) |
-| `.githooks/`, `.github/workflows/` | yes | Pre-commit hook and CI, both calling `tools/check-repo.sh` |
+| `.githooks/`, `.github/workflows/` | yes | Hooks (`pre-commit` → `tools/check-repo.sh`, `commit-msg` → `tools/check_commits.py`) and CI (`checks`, `conventional-commits`) |
+| `tools/check_commits.py` | yes | Conventional Commits check for PR titles, commit ranges and the commit-msg hook |
 | `.mcp.json` | yes | Project-scoped MCP registration of `rea` (`docker exec -i rea-mcp rea --mcp`) for clients that read this format |
 | `CLAUDE.md` | yes | Import-only pointer to this file, for agents that look for `CLAUDE.md` |
 | `firmware/` | **no** | Official zips/`.chk` images + `SHA256SUMS` |
@@ -85,10 +86,10 @@ Repo skills must not restate REA functionality (tool usage, extraction or decomp
 
 ## Checks (run before every commit)
 ```bash
-git config core.hooksPath .githooks   # once per clone: pre-commit runs the checks on staged files
+git config core.hooksPath .githooks   # once per clone: pre-commit runs the checks, commit-msg checks the message
 tools/check-repo.sh                   # forbidden paths, gitleaks, private-data guard, bash -n + shellcheck, py_compile, unit tests
 ```
-CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
+CI (`.github/workflows/checks.yml`) runs the same script, plus a full-history gitleaks scan. `.github/workflows/conventional-commits.yml` checks the PR title and commits. Both are required to merge into the protected `main`. Unit tests live in `tools/tests/test_*.py` (stdlib `unittest`; must run on macOS's system Python 3.9 and on CI's 3.12).
 
 ## Gotchas (each one cost time; don't rediscover them)
 - **REA output dirs must not be bind mounts (Colima-specific).** On Colima, REA fails with `cleanup_incomplete` / "Extraction directory identity changed". Write to `/work/out` (volume `rea-out` in `rea-mcp`), then `tar` it out.

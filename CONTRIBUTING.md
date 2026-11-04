@@ -22,16 +22,20 @@ These rules apply to humans and coding agents alike. Agents: [AGENTS.md](AGENTS.
    | `build` | Docker images, firmware build scripts |
    | `ci` | GitHub Actions workflows |
    | `chore` | repo maintenance, settings, templates |
+   | `perf` | performance improvement |
+   | `revert` | reverts an earlier commit |
 
    - **Scopes:** `tools`, `docs`, `playbook`, `findings`, `roadmap`, `firmware`, `ci`, `skills`, `agents`.
    - **Breaking change** (e.g. a release that needs the recovery path to install or roll back): add `!` after the type/scope and a `BREAKING CHANGE:` footer → major release.
-4. **Run the checks** before every commit (the pre-commit hook does this once enabled):
+4. **Run the checks** before every commit. With the hooks enabled, `pre-commit` runs them and `commit-msg` rejects non-conventional messages (`tools/check_commits.py`):
    ```bash
    git config core.hooksPath .githooks   # once per clone
    tools/check-repo.sh
    ```
-5. **Open a PR against `main`.** The title is a conventional commit (it becomes the squash-merge message), and the body says `Closes #N`. Fill in the PR template. CI (`checks`) must pass.
-6. **Squash-merge** after review, then delete the branch.
+5. **Open a PR against `main`.** The title is a conventional commit (it becomes the squash-merge message), and the body says `Closes #N`. Fill in the PR template. CI must pass: `checks`, plus `conventional-commits`, which checks the PR title and every commit in the PR.
+6. **Squash-merge** after review. It's the only merge method enabled; the PR title becomes the commit on `main`, and GitHub deletes the branch.
+
+`main` is protected: no direct pushes or force-pushes (admins included), and a PR can merge only once both CI checks pass.
 
 One PR per issue. If you find more work, open a new issue instead of growing the PR.
 
