@@ -1,0 +1,28 @@
+name: conventional-commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so HEAD^1..HEAD^2 resolves
+
+      - name: PR title (becomes the squash-merge commit message)
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: python3 -I tools/check_commits.py --title "$TITLE"
+
+      # actions/checkout on pull_request checks out refs/pull/N/merge: HEAD^1 is the
+      # current base tip and HEAD^2 the PR head, so this lists exactly the PR's own
+      # commits even after main was merged into the branch. Checking every commit is
+      # deliberate policy (CONTRIBUTING.md); fixup!/squash!/Merge headers are allowed.
+      - name: Commit messages in this PR
+        run: python3 -I tools/check_commits.py --range "HEAD^1..HEAD^2"
