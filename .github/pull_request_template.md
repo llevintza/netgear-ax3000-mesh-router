@@ -6,7 +6,7 @@ Closes #
 
 
 ## Type
-- [ ] feat · [ ] fix · [ ] docs · [ ] test · [ ] refactor · [ ] build · [ ] ci · [ ] chore
+- [ ] feat · [ ] fix · [ ] docs · [ ] test · [ ] refactor · [ ] build · [ ] ci · [ ] chore · [ ] perf · [ ] revert
 
 ## Checklist
 - [ ] Branch is `<type>/<issue>-<slug>` from current `main`; this PR covers one issue

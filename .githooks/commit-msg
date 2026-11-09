@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Enable once per clone: git config core.hooksPath .githooks
+# Rejects commit messages that aren't Conventional Commits (see CONTRIBUTING.md).
+exec python3 -I "$(git rev-parse --show-toplevel)/tools/check_commits.py" --file "$1"
