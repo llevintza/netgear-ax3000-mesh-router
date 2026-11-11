@@ -164,3 +164,28 @@ Narrative and step-by-step: [case-study-2026-11.md](case-study-2026-11.md). Evid
 **Lessons:**
 - Check each satellite's firmware on its own `http://<satellite>/currentsetting.htm` (no login needed). The router's table can show a blank version.
 - Don't use a satellite's own hidden upgrade page for a large version jump. It rejected the correct image.
+
+## 11. Live session 2026-11-11: WAN DNS set to AdGuard DNS blocks tracker domains for every client
+**Symptom:** some sites fail on every device on the mesh, with a "can't connect" / proxy error in the browser. Example: the Umami analytics dashboard (`cloud.umami.is`) and its collector (`gateway.umami.is`). The same sites work on mobile data or with public DNS. The backhaul was healthy (both satellites "Good" on Attached Devices), so this is unrelated to §1–§10.
+
+**Cause (verified on the router's web UI, read-only):** BASIC → Internet → Internet Setup (`BAS_ether.htm`, posts to `ether.cgi`) → *Domain Name Server (DNS) Address* was set to **Use These DNS Servers**, with Primary `94.140.14.14` and Secondary `94.140.15.15`. These are **AdGuard DNS's public filtering resolvers** (ads and trackers blocked). Clients get the router as their DNS server via DHCP, and the router forwards to the configured servers, so the blocklist applies to the whole network. The router's own filtering (Armor / Security tile) was **not activated**. The blocking came only from this DNS setting.
+
+**Evidence** (`dig` from a LAN client):
+
+| Query | Via router | Via `94.140.14.14` directly | Via `1.1.1.1` |
+|---|---|---|---|
+| `cloud.umami.is`, `gateway.umami.is` | `0.0.0.0` | `0.0.0.0` | real addresses |
+| `doubleclick.net`, `googleadservices.com` | `0.0.0.0` | `0.0.0.0` | real addresses |
+| `example.com` | real addresses | real addresses | real addresses |
+
+The router's `0.0.0.0` answers carry an EDNS **Extended DNS Error option (code 15), info-code 17 = "Filtered"** (RFC 8914). The upstream adds that marker; the router passes it through. That tells a blocklist apart from an outage or a firewall rule.
+
+**How to tell quickly:** `dig +short <blocked-name> @<router-lan-ip>` returns `0.0.0.0`, while `dig +short <blocked-name> @1.1.1.1` returns real addresses. If so, look at Internet Setup's DNS fields before anything else.
+
+**Options** (each is the owner's call: it changes filtering for every device):
+- **Rollback to stock:** set *Get Automatically from ISP* and Apply. That's the firmware default; the ISP's resolvers get used.
+- **Keep AdGuard, without filtering:** AdGuard's non-filtering resolvers are `94.140.14.140` / `94.140.14.141` (verified: `cloud.umami.is` resolves through them).
+- **Keep filtering and allowlist specific names:** that needs a filtering service with a per-account allowlist (AdGuard DNS private server, NextDNS) or a local resolver (Pi-hole / AdGuard Home, #2). The free public AdGuard servers can't be allowlisted.
+- **Per-browser bypass:** Chrome secure DNS (DoH) skips the router's DNS for that browser only. #23 tracks blocking that kind of bypass in custom firmware.
+
+**Applying the change:** Apply on Internet Setup re-applies the WAN settings. The page set doesn't link it to the `DIG_reboot*.htm` wait pages, so it isn't expected to reboot the units (inferred, not traced through `httpd`'s `ether.cgi` handler). Expect a short internet interruption anyway, and don't apply during calls. Afterwards, flush client DNS caches (macOS: `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`).
